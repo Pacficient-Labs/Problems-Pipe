@@ -3,10 +3,10 @@
   "displayName": "Problems Pipe",
   "description": "Expose VS Code Problems panel to AI assistants via MCP",
   "version": "0.1.0",
-  "publisher": "problems-pipe",
+  "publisher": "pacnpal",
   "repository": {
     "type": "git",
-    "url": "https://github.com/problems-pipe/problems-pipe"
+    "url": "https://github.com/Pacficient-Labs/Problems-Pipe"
   },
   "engines": {
     "vscode": "^1.85.0"
