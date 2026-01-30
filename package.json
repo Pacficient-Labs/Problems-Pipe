@@ -1,0 +1,137 @@
+{
+  "name": "problems-pipe",
+  "displayName": "Problems Pipe",
+  "description": "Expose VS Code Problems panel to AI assistants via MCP",
+  "version": "0.1.0",
+  "publisher": "problems-pipe",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/problems-pipe/problems-pipe"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "ai",
+    "diagnostics",
+    "problems",
+    "claude",
+    "llm"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "problemsPipe.start",
+        "title": "Problems Pipe: Start MCP Server"
+      },
+      {
+        "command": "problemsPipe.stop",
+        "title": "Problems Pipe: Stop MCP Server"
+      },
+      {
+        "command": "problemsPipe.showStatus",
+        "title": "Problems Pipe: Show Status"
+      },
+      {
+        "command": "problemsPipe.copyServerConfig",
+        "title": "Problems Pipe: Copy MCP Server Configuration"
+      }
+    ],
+    "configuration": {
+      "title": "Problems Pipe",
+      "properties": {
+        "problemsPipe.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Problems Pipe MCP Server"
+        },
+        "problemsPipe.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the MCP server on VS Code startup"
+        },
+        "problemsPipe.transport": {
+          "type": "string",
+          "enum": ["http"],
+          "default": "http",
+          "description": "Transport mechanism for MCP communication"
+        },
+        "problemsPipe.httpPort": {
+          "type": "number",
+          "default": 3030,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "HTTP server port"
+        },
+        "problemsPipe.httpHost": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "HTTP server host"
+        },
+        "problemsPipe.includeSources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Only include diagnostics from these sources (empty = all)"
+        },
+        "problemsPipe.excludeSources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Exclude diagnostics from these sources"
+        },
+        "problemsPipe.maxDiagnosticsPerFile": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum diagnostics to report per file"
+        },
+        "problemsPipe.contextLines": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Default number of context lines to include"
+        },
+        "problemsPipe.enableCodeActions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable code action retrieval"
+        },
+        "problemsPipe.logLevel": {
+          "type": "string",
+          "enum": ["off", "error", "warn", "info", "debug"],
+          "default": "info",
+          "description": "Logging verbosity level"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  }
+}
