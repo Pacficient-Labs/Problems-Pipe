@@ -1,0 +1,14 @@
+.git/**
+.github/**
+.vscode/**
+.claude/**
+.snapshots/**
+src/**
+tests/**
+node_modules/**
+esbuild.config.mjs
+vitest.config.mts
+tsconfig.json
+package-lock.json
+**/*.ts
+**/*.map
