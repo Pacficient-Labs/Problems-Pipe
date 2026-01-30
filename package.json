@@ -62,7 +62,9 @@
         },
         "problemsPipe.transport": {
           "type": "string",
-          "enum": ["http"],
+          "enum": [
+            "http"
+          ],
           "default": "http",
           "description": "Transport mechanism for MCP communication"
         },
@@ -80,13 +82,17 @@
         },
         "problemsPipe.includeSources": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Only include diagnostics from these sources (empty = all)"
         },
         "problemsPipe.excludeSources": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Exclude diagnostics from these sources"
         },
@@ -109,7 +115,13 @@
         },
         "problemsPipe.logLevel": {
           "type": "string",
-          "enum": ["off", "error", "warn", "info", "debug"],
+          "enum": [
+            "off",
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
           "default": "info",
           "description": "Logging verbosity level"
         }
@@ -132,6 +144,6 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.25.3"
   }
 }
