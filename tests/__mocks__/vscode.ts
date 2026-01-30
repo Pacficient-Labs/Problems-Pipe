@@ -14,6 +14,16 @@ export const _diagnostics = new Map<string, any[]>();
 /** File text content keyed by URI string – consumed by openTextDocument. */
 export const _fileContents = new Map<string, string>();
 
+/** Helper to seed diagnostics for tests without accessing the map directly. */
+export function _setDiagnostics(uri: string, diagnostics: any[]): void {
+  _diagnostics.set(uri, diagnostics);
+}
+
+/** Helper to seed file contents for tests without accessing the map directly. */
+export function _setFileContents(uri: string, text: string): void {
+  _fileContents.set(uri, text);
+}
+
 /** Reset all mutable state between tests. */
 export function _reset(): void {
   _diagnostics.clear();
@@ -104,7 +114,8 @@ export class EventEmitter<T = any> {
       },
     };
   };
-
+    const snapshot = this.listeners.slice();
+    for (const listener of snapshot) {
   fire(data: T): void {
     for (const listener of this.listeners) {
       listener(data);
