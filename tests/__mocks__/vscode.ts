@@ -114,10 +114,9 @@ export class EventEmitter<T = any> {
       },
     };
   };
+  fire(data: T): void {
     const snapshot = this.listeners.slice();
     for (const listener of snapshot) {
-  fire(data: T): void {
-    for (const listener of this.listeners) {
       listener(data);
     }
   }
