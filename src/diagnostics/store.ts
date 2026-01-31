@@ -548,8 +548,8 @@ export class DiagnosticStore {
       if (!byGroup.has(key)) {
         byGroup.set(key, { count: 0, files: new Set() });
       }
-      byGroup.get(key)?.count++;
-      byGroup.get(key)?.files.add(d.relativePath);
+      byGroup.get(key)!.count++;
+      byGroup.get(key)!.files.add(d.relativePath);
     }
 
     const summary: DiagnosticSummary = {
