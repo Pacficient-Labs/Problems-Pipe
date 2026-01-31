@@ -1,5 +1,7 @@
 # Problems Pipe
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/a0a85ec0c51149be8810d6b9bd3004ed)](https://app.codacy.com/gh/Pacficient-Labs/Problems-Pipe?utm_source=github.com&utm_medium=referral&utm_content=Pacficient-Labs/Problems-Pipe&utm_campaign=Badge_Grade)
+
 A VS Code extension that exposes the **Problems panel** (diagnostics) to AI assistants via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It runs a local HTTP-based MCP server inside VS Code so that tools like Claude, Cursor, and other MCP-compatible clients can query, filter, and act on real-time compiler errors, lint warnings, and other diagnostics.
 
 ## Why
