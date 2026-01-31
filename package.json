@@ -2,7 +2,7 @@
   "name": "problems-pipe",
   "displayName": "Problems Pipe",
   "description": "Expose VS Code Problems panel to AI assistants via MCP",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "pacficientlabs",
   "repository": {
     "type": "git",
