@@ -19,7 +19,7 @@ export class StatusBarManager implements vscode.Disposable {
     this.update();
 
     this.disposables.push(
-      this.store.onDidChange(() => this.update())
+      this.store.onDidChange(() => { this.update(); })
     );
 
     this.item.show();

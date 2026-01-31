@@ -84,14 +84,14 @@ export class HttpTransport {
     });
 
     return new Promise((resolve, reject) => {
-      this.httpServer!.on("error", (err: NodeJS.ErrnoException) => {
+      this.httpServer?.on("error", (err: NodeJS.ErrnoException) => {
         if (err.code === "EADDRINUSE") {
           logError(`Port ${this.port} is already in use`);
         }
         reject(err);
       });
 
-      this.httpServer!.listen(this.port, this.host, () => {
+      this.httpServer?.listen(this.port, this.host, () => {
         logInfo(`MCP HTTP server listening on http://${this.host}:${this.port}/mcp`);
         resolve();
       });
@@ -114,7 +114,7 @@ export class HttpTransport {
     // Close HTTP server
     if (this.httpServer) {
       return new Promise((resolve) => {
-        this.httpServer!.close(() => {
+        this.httpServer?.close(() => {
           this.httpServer = undefined;
           logInfo("MCP HTTP server stopped");
           resolve();
@@ -314,7 +314,6 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString()));
-    req.on("error", reject);
+    req.on("end", () => { resolve(Buffer.concat(chunks).toString()); });    req.on("error", reject);
   });
 }
