@@ -4,12 +4,12 @@ import type { DiagnosticStore } from "../diagnostics/index.js";
 import { logTrace } from "../utils/index.js";
 
 export class StatusBarManager implements vscode.Disposable {
-  private item: vscode.StatusBarItem;
-  private disposables: vscode.Disposable[] = [];
+  private readonly item: vscode.StatusBarItem;
+  private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
-    private server: ProblemsMcpServer,
-    private store: DiagnosticStore
+    private readonly server: ProblemsMcpServer,
+    private readonly store: DiagnosticStore
   ) {
     this.item = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,

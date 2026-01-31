@@ -6,11 +6,11 @@ export function registerSummaryResource(
   server: McpServer,
   store: DiagnosticStore
 ): void {
-  server.resource(
-    "problems-summary",
-    "problems://summary",
-    { mimeType: "application/json" },
-    async (uri) => {
+  server.resource({
+    name: "problems-summary",
+    uri: "problems://summary",
+    metadata: { mimeType: "application/json" },
+    async read(uri) {
       logDebug("[Resource:summary] accessed");
       const summary = store.getSummary("severity");
       logDebug(`[Resource:summary] total: ${summary.total}`);
@@ -24,5 +24,5 @@ export function registerSummaryResource(
         ],
       };
     }
-  );
+  });
 }

@@ -6,11 +6,11 @@ export function registerErrorsOnlyResource(
   server: McpServer,
   store: DiagnosticStore
 ): void {
-  server.resource(
-    "errors-only",
-    "problems://errors",
-    { mimeType: "application/json" },
-    async (uri) => {
+  server.resource({
+    name: "errors-only",
+    uri: "problems://errors",
+    metadata: { mimeType: "application/json" },
+    read: async (uri) => {
       logDebug("[Resource:errors-only] accessed");
       const errors = await store.query({
         severity: ["error"],
@@ -26,6 +26,6 @@ export function registerErrorsOnlyResource(
           },
         ],
       };
-    }
-  );
+    },
+  });
 }

@@ -93,7 +93,7 @@ export function registerGetCodeActions(
   server: McpServer,
   store: DiagnosticStore
 ): RegisteredTool {
-  return server.tool(
+  return server.registerTool?.(
     "get_code_actions",
     "Retrieve available quick fixes and code actions for a file or location",
     {

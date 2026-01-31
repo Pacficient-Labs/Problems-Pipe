@@ -3,7 +3,7 @@ import type { ProblemsMcpServer } from "../mcp/index.js";
 import type { DiagnosticStore } from "../diagnostics/index.js";
 import type { StatusBarManager } from "./statusBar.js";
 import type { ExtensionConfig } from "../config/index.js";
-import { logInfo, logError, logDebug } from "../utils/index.js";
+import { logInfo, logDebug } from "../utils/index.js";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -57,16 +57,17 @@ export function registerCommands(
       ];
 
       if (server.isRunning) {
-        lines.push(`URL: ${server.url}`);
-        lines.push(`Connected clients: ${server.sessionCount}`);
+        lines.push(`URL: ${server.url}`, `Connected clients: ${server.sessionCount}`);
       }
 
-      lines.push("");
-      lines.push(`**Diagnostics:** ${total} total`);
-      lines.push(`  Errors: ${counts.errors}`);
-      lines.push(`  Warnings: ${counts.warnings}`);
-      lines.push(`  Info: ${counts.info}`);
-      lines.push(`  Hints: ${counts.hints}`);
+      lines.push(
+        "",
+        `**Diagnostics:** ${total} total`,
+        `  Errors: ${counts.errors}`,
+        `  Warnings: ${counts.warnings}`,
+        `  Info: ${counts.info}`,
+        `  Hints: ${counts.hints}`
+      );
 
       const action = server.isRunning
         ? await vscode.window.showInformationMessage(

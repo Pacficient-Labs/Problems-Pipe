@@ -21,14 +21,16 @@ jobs:
         run: npm test
 
       - name: Publish to Visual Studio Marketplace
-        uses: HaaLeo/publish-vscode-extension@v2
+        # Pinned to the full commit SHA for immutability (tag: v2)
+        uses: HaaLeo/publish-vscode-extension@ca5561daa085dee804bf9f37fe0165785a9b14db
         id: publish
         with:
           pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
           registryUrl: https://marketplace.visualstudio.com
 
       - name: Publish to Open VSX Registry
-        uses: HaaLeo/publish-vscode-extension@v2
+        # Pinned to the full commit SHA for immutability (tag: v2)
+        uses: HaaLeo/publish-vscode-extension@ca5561daa085dee804bf9f37fe0165785a9b14db
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
           extensionFile: ${{ steps.publish.outputs.vsixPath }}

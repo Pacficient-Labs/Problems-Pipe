@@ -4,12 +4,12 @@ import type { DiagnosticStore } from "../../diagnostics/index.js";
 import { logDebug } from "../../utils/index.js";
 
 function encodeResourcePath(value: string): string {
-  return value.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
+  return value.replaceAll('\\', "/").split("/").map(encodeURIComponent).join("/");
 }
 
 function decodeResourcePath(value: string): string {
   return value
-    .replace(/\\/g, "/")
+    .replaceAll('\\', "/")
     .split("/")
     .map((segment) => {
       try {
@@ -35,11 +35,13 @@ export function registerFileProblemsResource(
     }),
   });
 
-  server.resource(
-    "file-problems",
+  server.resource({
+    name: "file-problems",
     template,
-    { mimeType: "application/json" },
-    async (uri, variables) => {
+    metadata: { mimeType: "application/json" },
+    read: async (ctx) => {
+      const variables = ctx.variables;
+      const uri = ctx.uri;
       const rawPath = Array.isArray(variables.path)
         ? variables.path.join("/")
         : variables.path;
@@ -57,5 +59,5 @@ export function registerFileProblemsResource(
         ],
       };
     }
-  );
+  });
 }

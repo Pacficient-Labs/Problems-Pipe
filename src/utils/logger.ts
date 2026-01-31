@@ -15,9 +15,7 @@ let currentLevel: LogLevel = "info";
 
 export function initLogger(level: LogLevel): void {
   currentLevel = level;
-  if (!channel) {
-    channel = vscode.window.createOutputChannel("Problems Pipe");
-  }
+  channel ??= vscode.window.createOutputChannel("Problems Pipe");
 }
 
 export function setLogLevel(level: LogLevel): void {
@@ -37,10 +35,19 @@ function formatMessage(level: string, message: string): string {
   return `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 }
 
+function getErrorSuffix(error: unknown): string {
+  if (error instanceof Error) {
+    return `: ${error.message}`;
+  }
+  if (error) {
+    return `: ${JSON.stringify(error)}`;
+  }
+  return "";
+}
+
 export function logError(message: string, error?: unknown): void {
   if (!shouldLog("error")) return;
-  const suffix =
-    error instanceof Error ? `: ${error.message}` : error ? `: ${error}` : "";
+  const suffix = getErrorSuffix(error);
   channel?.appendLine(formatMessage("error", message + suffix));
 }
 

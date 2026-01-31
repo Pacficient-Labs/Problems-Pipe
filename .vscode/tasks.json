@@ -5,14 +5,14 @@
       "type": "npm",
       "script": "build",
       "group": "build",
-      "problemMatcher": ["$tsc"]
+      "problemMatcher": ["$gulp-tsc"]
     },
     {
       "type": "npm",
       "script": "watch",
       "isBackground": true,
       "group": "build",
-      "problemMatcher": ["$tsc-watch"]
+      "problemMatcher": ["$gulp-tsc"]
     }
   ]
 }

@@ -7,7 +7,7 @@ export function registerGetProblemSummary(
   server: McpServer,
   store: DiagnosticStore
 ): void {
-  server.tool(
+  server.registerTool?.(
     "get_problem_summary",
     "Get aggregated statistics about problems in the workspace",
     {

@@ -1,5 +1,6 @@
-import { z } from "zod";
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ListPromptsRequestSchema, GetPromptRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
 import { logDebug } from "../../utils/index.js";
 
@@ -7,12 +8,33 @@ export function registerExplainErrorPrompt(
   server: McpServer,
   store: DiagnosticStore
 ): void {
-  server.prompt(
-    "explain-error",
-    "Explain a specific error and suggest how to fix it",
-    { diagnosticId: z.string().describe("The diagnostic ID to explain") },
-    async ({ diagnosticId }) => {
-      logDebug(`[Prompt:explain-error] invoked — diagnosticId: ${diagnosticId}`);
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [
+      {
+        name: "explain-error",
+        description: "Explain a specific error and suggest how to fix it",
+        arguments: [
+          {
+            name: "diagnosticId",
+            description: "The diagnostic ID to explain",
+            required: true,
+          },
+        ],
+      },
+    ],
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    if (request.params.name !== "explain-error") {
+      throw new Error(`Unknown prompt: ${request.params.name}`);
+    }
+
+    const diagnosticId = request.params.arguments?.diagnosticId as string;
+    if (!diagnosticId) {
+      throw new Error("diagnosticId argument is required");
+    }
+
+    logDebug(`[Prompt:explain-error] invoked — diagnosticId: ${diagnosticId}`);
       const diagnostic = store.getById(diagnosticId);
       if (!diagnostic) {
         logDebug(`[Prompt:explain-error] diagnostic not found: ${diagnosticId}`);
@@ -61,17 +83,16 @@ export function registerExplainErrorPrompt(
         }
       }
 
-      return {
-        messages: [
-          {
-            role: "user" as const,
-            content: {
-              type: "text" as const,
-              text: lines.join("\n"),
-            },
+    return {
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: lines.join("\n"),
           },
-        ],
-      };
-    }
-  );
+        },
+      ],
+    };
+  });
 }

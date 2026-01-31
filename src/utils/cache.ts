@@ -6,7 +6,7 @@ interface CacheEntry<V> {
 }
 
 export class LRUCache<V> {
-  private map = new Map<string, CacheEntry<V>>();
+  private readonly map = new Map<string, CacheEntry<V>>();
   private head: CacheEntry<V> | null = null;
   private tail: CacheEntry<V> | null = null;
 
@@ -67,9 +67,7 @@ export class LRUCache<V> {
       this.head.prev = entry;
     }
     this.head = entry;
-    if (!this.tail) {
-      this.tail = entry;
-    }
+    this.tail ??= entry;
   }
 
   private removeEntry(entry: CacheEntry<V>): void {

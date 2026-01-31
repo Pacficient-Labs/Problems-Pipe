@@ -4,6 +4,53 @@ import type { DiagnosticStore } from "../../diagnostics/index.js";
 import type { EnrichedDiagnostic } from "../../types/index.js";
 import { logDebug } from "../../utils/index.js";
 
+function formatDiagnosticHeader(d: EnrichedDiagnostic, loc: string): string {
+  const code = d.code == null ? "" : ` [${d.code}]`;
+  const source = d.source ? ` (${d.source})` : "";
+  return `### ${d.severity.toUpperCase()}${code}${source} at ${loc}`;
+}
+
+function pushContextBlock(lines: string[], d: EnrichedDiagnostic): void {
+  if (!d.contextLines) {
+    return;
+  }
+
+  lines.push("", "```");
+
+  const startLine = d.range.startLine - d.contextLines.before.length;
+  for (let i = 0; i < d.contextLines.before.length; i++) {
+    lines.push(
+      `${String(startLine + i + 1).padStart(4)} | ${d.contextLines.before[i]}`
+    );
+  }
+
+  lines.push(
+    `${String(d.range.startLine + 1).padStart(4)} | ${d.contextLines.line}  <-- HERE`
+  );
+
+  for (let i = 0; i < d.contextLines.after.length; i++) {
+    lines.push(
+      `${String(d.range.startLine + 2 + i).padStart(4)} | ${d.contextLines.after[i]}`
+    );
+  }
+
+  lines.push("```");
+}
+
+function pushRelatedInformation(lines: string[], d: EnrichedDiagnostic): void {
+  if (d.relatedInformation.length === 0) {
+    return;
+  }
+
+  lines.push(
+    "",
+    "Related:",
+    ...d.relatedInformation.map(
+      (ri) => `  - ${ri.relativePath}:${ri.range.startLine + 1}: ${ri.message}`
+    )
+  );
+}
+
 function formatFileProblems(
   filePath: string,
   diagnostics: EnrichedDiagnostic[]
@@ -16,37 +63,14 @@ function formatFileProblems(
 
   for (const d of diagnostics) {
     const loc = `Line ${d.range.startLine + 1}:${d.range.startCharacter + 1}`;
-    const code = d.code != null ? ` [${d.code}]` : "";
-    const source = d.source ? ` (${d.source})` : "";
 
-    lines.push(`### ${d.severity.toUpperCase()}${code}${source} at ${loc}`);
-    lines.push(d.message);
+    lines.push(
+      formatDiagnosticHeader(d, loc),
+      d.message
+    );
 
-    if (d.contextLines) {
-      lines.push("");
-      lines.push("```");
-      const startLine = d.range.startLine - d.contextLines.before.length;
-      for (let i = 0; i < d.contextLines.before.length; i++) {
-        lines.push(`${String(startLine + i + 1).padStart(4)} | ${d.contextLines.before[i]}`);
-      }
-      lines.push(`${String(d.range.startLine + 1).padStart(4)} | ${d.contextLines.line}  <-- HERE`);
-      for (let i = 0; i < d.contextLines.after.length; i++) {
-        lines.push(
-          `${String(d.range.startLine + 2 + i).padStart(4)} | ${d.contextLines.after[i]}`
-        );
-      }
-      lines.push("```");
-    }
-
-    if (d.relatedInformation.length > 0) {
-      lines.push("");
-      lines.push("Related:");
-      for (const ri of d.relatedInformation) {
-        lines.push(
-          `  - ${ri.relativePath}:${ri.range.startLine + 1}: ${ri.message}`
-        );
-      }
-    }
+    pushContextBlock(lines, d);
+    pushRelatedInformation(lines, d);
 
     lines.push("");
   }
@@ -58,7 +82,7 @@ export function registerGetFileProblems(
   server: McpServer,
   store: DiagnosticStore
 ): void {
-  server.tool(
+  server.registerTool(
     "get_file_problems",
     "Get all problems for a specific file with formatted context",
     {

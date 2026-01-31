@@ -18,7 +18,7 @@ function formatErrorsForPrompt(errors: EnrichedDiagnostic[]): string {
     lines.push(`### ${file}`);
     for (const d of diags) {
       const loc = `Line ${d.range.startLine + 1}:${d.range.startCharacter + 1}`;
-      const code = d.code != null ? ` [${d.code}]` : "";
+      const code = d.code == null ? "" : ` [${d.code}]`;
       const source = d.source ? ` (${d.source})` : "";
       lines.push(`- **${loc}**${code}${source}: ${d.message}`);
     }
@@ -32,10 +32,8 @@ export function registerFixAllErrorsPrompt(
   server: McpServer,
   store: DiagnosticStore
 ): void {
-  server.prompt(
-    "fix-all-errors",
-    "Generate a prompt to fix all errors in the workspace",
-    async () => {
+  server.setRequestHandler("prompts/get", async (request) => {
+    if (request.params.name === "fix-all-errors") {
       logDebug("[Prompt:fix-all-errors] invoked");
       const errors = await store.query({
         severity: ["error"],
@@ -44,6 +42,7 @@ export function registerFixAllErrorsPrompt(
       logDebug(`[Prompt:fix-all-errors] found ${errors.length} error(s)`);
       const formatted = formatErrorsForPrompt(errors);
       return {
+        description: "Generate a prompt to fix all errors in the workspace",
         messages: [
           {
             role: "user" as const,
@@ -58,5 +57,6 @@ export function registerFixAllErrorsPrompt(
         ],
       };
     }
-  );
+    throw new Error(`Unknown prompt: ${request.params.name}`);
+  });
 }

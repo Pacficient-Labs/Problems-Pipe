@@ -4,10 +4,10 @@ import type { DiagnosticStore } from "../../diagnostics/index.js";
 import { logDebug } from "../../utils/index.js";
 
 export function registerGetProblems(server: McpServer, store: DiagnosticStore): void {
-  server.tool(
-    "get_problems",
-    "Retrieve diagnostics from the VS Code Problems panel with filtering options",
-    {
+  server.registerTool({
+    name: "get_problems",
+    description: "Retrieve diagnostics from the VS Code Problems panel with filtering options",
+    params: {
       uri: z
         .string()
         .optional()
@@ -55,7 +55,7 @@ export function registerGetProblems(server: McpServer, store: DiagnosticStore): 
         .optional()
         .describe("Number of context lines above and below (defaults to config)"),
     },
-    async (params) => {
+    handler: async (params) => {
       logDebug(`[Tool:get_problems] invoked — limit: ${params.limit}, severity: ${params.severity?.join(",") ?? "all"}, uri: ${params.uri ?? "any"}`);
       const diagnostics = await store.query(params);
       logDebug(`[Tool:get_problems] returning ${diagnostics.length} result(s)`);
@@ -68,5 +68,5 @@ export function registerGetProblems(server: McpServer, store: DiagnosticStore): 
         ],
       };
     }
-  );
+  });
 }
