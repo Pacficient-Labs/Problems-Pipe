@@ -78,7 +78,7 @@ export async function activate(
     if (!newConfig.enabled) {
       logDebug("[Extension] extension disabled via config");
       if (server.isRunning) {
-        server.stop().catch((err) => logError("Failed to stop server", err));
+        server.stop().catch((err) => { logError("Failed to stop server", err); });
       }
       statusBar.update();
       return;
@@ -93,10 +93,10 @@ export async function activate(
       logDebug(
         `[Extension] transport settings changed (${previousConfig.httpHost}:${previousConfig.httpPort} -> ${newConfig.httpHost}:${newConfig.httpPort}), restarting server`
       );
-      server.restart().catch((err) => logError("Failed to restart server", err));
+      server.restart().catch((err) => { logError("Failed to restart server", err); });
     } else if (!server.isRunning && newConfig.autoStart) {
       logDebug("[Extension] server not running and autoStart enabled, starting");
-      safeStart("Auto-start");
+      void safeStart("Auto-start");
     }
 
     statusBar.update();
@@ -105,7 +105,7 @@ export async function activate(
   // Register disposables
   context.subscriptions.push(
     configManager,
-    { dispose: () => store.dispose() },
+    { dispose: () => { store.dispose(); } },
     collector,
     server,
     statusBar,

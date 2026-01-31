@@ -62,24 +62,28 @@ function globMatch(glob: string, value: string): boolean {
     return pi === pattern.length;
   };
 
+  const handleDoubleStarPattern = (pIndex: number, vIndex: number): boolean => {
+    // Collapse consecutive '**'
+    while (pIndex + 1 < patternParts.length && patternParts[pIndex + 1] === "**") {
+      pIndex++;
+    }
+    // '**' at end matches the rest.
+    if (pIndex === patternParts.length - 1) return true;
+
+    // Try to match the remaining pattern at every possible segment boundary.
+    for (let skip = vIndex; skip <= valueParts.length; skip++) {
+      if (matchParts(pIndex + 1, skip)) return true;
+    }
+    return false;
+  };
+
   const matchParts = (pIndex: number, vIndex: number): boolean => {
     while (true) {
       if (pIndex === patternParts.length) return vIndex === valueParts.length;
 
       const p = patternParts[pIndex];
       if (p === "**") {
-        // Collapse consecutive '**'
-        while (pIndex + 1 < patternParts.length && patternParts[pIndex + 1] === "**") {
-          pIndex++;
-        }
-        // '**' at end matches the rest.
-        if (pIndex === patternParts.length - 1) return true;
-
-        // Try to match the remaining pattern at every possible segment boundary.
-        for (let skip = vIndex; skip <= valueParts.length; skip++) {
-          if (matchParts(pIndex + 1, skip)) return true;
-        }
-        return false;
+        return handleDoubleStarPattern(pIndex, vIndex);
       }
 
       if (vIndex === valueParts.length) return false;
@@ -95,6 +99,48 @@ function globMatch(glob: string, value: string): boolean {
 
 function normalizePath(value: string): string {
   return value.replaceAll('\\', "/");
+}
+
+/**
+ * Match a user-provided message pattern against a diagnostic message.
+ *
+ * NOTE: We intentionally do NOT treat `pattern` as a full regular expression
+ * to avoid dynamic RegExp construction (flagged by security tooling).
+ *
+ * Supported syntax:
+ * - `^text`    : case-insensitive startsWith
+ * - `text$`    : case-insensitive endsWith
+ * - `^text$`   : case-insensitive exact match
+ * - otherwise  : case-insensitive substring match
+ *
+ * Escapes supported: `\^`, `\$`, `\\`
+ */
+function matchMessagePattern(message: string, pattern: string): boolean {
+  let p = pattern;
+  let anchoredStart = false;
+  let anchoredEnd = false;
+
+  if (p.startsWith("^")) {
+    anchoredStart = true;
+    p = p.slice(1);
+  }
+
+  if (p.endsWith("$")) {
+    anchoredEnd = true;
+    p = p.slice(0, -1);
+  }
+
+  // Minimal unescape for the supported anchor characters.
+  // Use literal string replacement to avoid any dynamic RegExp construction.
+  p = p.split("\\\\").join("\x00").split(String.raw`\^`).join("^").split(String.raw`\$`).join("$").split("\x00").join("\\");
+
+  const msg = message.toLowerCase();
+  const needle = p.toLowerCase();
+
+  if (anchoredStart && anchoredEnd) return msg === needle;
+  if (anchoredStart) return msg.startsWith(needle);
+  if (anchoredEnd) return msg.endsWith(needle);
+  return msg.includes(needle);
 }
 
 const SEVERITY_MAP: Record<vscode.DiagnosticSeverity, Severity> = {
@@ -158,7 +204,7 @@ export class DiagnosticStore {
   private readonly cachedSummaries = new Map<SummaryGroupBy, DiagnosticSummary>();
   private readonly enricher = new ContextEnricher();
   private readonly changeEmitter = new vscode.EventEmitter<string[]>();
-  private disposables: vscode.Disposable[] = [];
+  private readonly disposables: vscode.Disposable[] = [];
 
   readonly onDidChange = this.changeEmitter.event;
 
@@ -313,7 +359,7 @@ export class DiagnosticStore {
         if (!this.bySource.has(d.source)) {
           this.bySource.set(d.source, new Set());
         }
-        this.bySource.get(d.source)!.add(uri);
+        this.bySource.get(d.source)?.add(uri);
       }
     }
   }
@@ -327,6 +373,66 @@ export class DiagnosticStore {
     }
   }
 
+  private getCandidateUris(params: DiagnosticQuery): Set<string> {
+    if (params.uri) {
+      const resolved = this.resolveUriOrPath(params.uri);
+      return resolved ? new Set([resolved]) : new Set();
+    }
+    if (params.severity?.length === 1) {
+      return new Set(this.bySeverity.get(params.severity[0]) ?? []);
+    }
+    if (params.source?.length === 1) {
+      return new Set(this.bySource.get(params.source[0]) ?? []);
+    }
+    return new Set(this.byUri.keys());
+  }
+
+  private filterByUriPattern(
+    candidateUris: Set<string>,
+    pattern: string
+  ): Set<string> {
+    const normalizedPattern = normalizePath(pattern);
+    const filtered = new Set<string>();
+    for (const uri of candidateUris) {
+      const rel = this.byUri.get(uri)?.[0]?.relativePath;
+      if (rel && globMatch(normalizedPattern, normalizePath(rel))) {
+        filtered.add(uri);
+      }
+    }
+    return filtered;
+  }
+
+  private filterByWorkspaceFolder(
+    candidateUris: Set<string>,
+    workspaceFolder: string
+  ): Set<string> {
+    const filtered = new Set<string>();
+    for (const uri of candidateUris) {
+      const diags = this.byUri.get(uri);
+      if (diags && diags[0]?.workspaceFolder === workspaceFolder) {
+        filtered.add(uri);
+      }
+    }
+    return filtered;
+  }
+
+  private collectDiagnosticsFromUris(
+    candidateUris: Set<string>,
+    params: DiagnosticQuery
+  ): EnrichedDiagnostic[] {
+    const results: EnrichedDiagnostic[] = [];
+    for (const uri of candidateUris) {
+      const diags = this.byUri.get(uri);
+      if (!diags) continue;
+      for (const d of diags) {
+        if (this.matchesDiagnostic(d, params)) {
+          results.push(d);
+        }
+      }
+    }
+    return results;
+  }
+
   async query(params: DiagnosticQuery = {}): Promise<EnrichedDiagnostic[]> {
     if (isDebugEnabled()) {
       const filters = Object.entries(params)
@@ -335,68 +441,32 @@ export class DiagnosticStore {
         .join(", ");
       logDebug(`[Store] query — ${filters || "no filters"}`);
     }
-    let candidateUris: Set<string>;
 
-    if (params.uri) {
-      const resolved = this.resolveUriOrPath(params.uri);
-      candidateUris = resolved ? new Set([resolved]) : new Set();
-    } else if (params.severity && params.severity.length === 1) {
-      candidateUris = new Set(this.bySeverity.get(params.severity[0]) ?? []);
-    } else if (params.source && params.source.length === 1) {
-      candidateUris = new Set(this.bySource.get(params.source[0]) ?? []);
-    } else {
-      candidateUris = new Set(this.byUri.keys());
-    }
+    let candidateUris = this.getCandidateUris(params);
 
-    // Apply URI pattern filter
     if (params.uriPattern) {
-      const pattern = normalizePath(params.uriPattern);
-      const filtered = new Set<string>();
-      for (const uri of candidateUris) {
-        const rel = this.byUri.get(uri)?.[0]?.relativePath;
-        if (rel && globMatch(pattern, normalizePath(rel))) {
-          filtered.add(uri);
-        }
-      }
-      candidateUris = filtered;
+      candidateUris = this.filterByUriPattern(candidateUris, params.uriPattern);
     }
 
-    // Workspace folder filter
     if (params.workspaceFolder) {
-      const wsf = params.workspaceFolder;
-      const filtered = new Set<string>();
-      for (const uri of candidateUris) {
-        const diags = this.byUri.get(uri);
-        if (diags && diags[0]?.workspaceFolder === wsf) {
-          filtered.add(uri);
-        }
-      }
-      candidateUris = filtered;
+      candidateUris = this.filterByWorkspaceFolder(
+        candidateUris,
+        params.workspaceFolder
+      );
     }
 
-    let results: EnrichedDiagnostic[] = [];
-    for (const uri of candidateUris) {
-      const diags = this.byUri.get(uri);
-      if (!diags) continue;
-      for (const d of diags) {
-        if (!this.matchesDiagnostic(d, params)) continue;
-        results.push(d);
-      }
-    }
+    let results = this.collectDiagnosticsFromUris(candidateUris, params);
 
-    // Sort
     results = this.sortResults(
       results,
       params.sortBy ?? "severity",
       params.sortOrder ?? "asc"
     );
 
-    // Paginate
     const offset = params.offset ?? 0;
     const limit = params.limit ?? 100;
     results = results.slice(offset, offset + limit);
 
-    // Optionally enrich with context
     if (params.includeContext) {
       const contextCount = params.contextLines ?? this.config.contextLines;
       logDebug(`[Store] enriching ${results.length} result(s) with ${contextCount} context lines`);
@@ -445,7 +515,7 @@ export class DiagnosticStore {
         files.push(diags[0].relativePath);
       }
     }
-    return files.sort();
+    return files.sort((a, b) => a.localeCompare(b));
   }
 
   getSummary(groupBy: SummaryGroupBy): DiagnosticSummary {
@@ -457,7 +527,7 @@ export class DiagnosticStore {
     logDebug(`[Store] getSummary(${groupBy}) — computing`);
 
     const all = this.getAll();
-    const byGroup: Record<string, { count: number; files: Set<string> }> = {};
+    const byGroup = new Map<string, { count: number; files: Set<string> }>();
 
     for (const d of all) {
       let key: string;
@@ -475,19 +545,19 @@ export class DiagnosticStore {
           key = d.workspaceFolder ?? "default";
           break;
       }
-      if (!byGroup[key]) {
-        byGroup[key] = { count: 0, files: new Set() };
+      if (!byGroup.has(key)) {
+        byGroup.set(key, { count: 0, files: new Set() });
       }
-      byGroup[key].count++;
-      byGroup[key].files.add(d.relativePath);
+      byGroup.get(key)!.count++;
+      byGroup.get(key)!.files.add(d.relativePath);
     }
 
     const summary: DiagnosticSummary = {
       total: all.length,
       byGroup: Object.fromEntries(
-        Object.entries(byGroup).map(([k, v]) => [
+        Array.from(byGroup).map(([k, v]) => [
           k,
-          { count: v.count, files: [...v.files].sort() },
+          { count: v.count, files: [...v.files].sort((a, b) => a.localeCompare(b)) },
         ])
       ),
       timestamp: new Date().toISOString(),
@@ -528,12 +598,7 @@ export class DiagnosticStore {
     if (params.source && (!d.source || !params.source.includes(d.source))) return false;
     if (params.code && (d.code == null || !params.code.includes(d.code))) return false;
     if (params.messagePattern) {
-      try {
-        const re = new RegExp(params.messagePattern, "i");
-        if (!re.test(d.message)) return false;
-      } catch {
-        if (!d.message.includes(params.messagePattern)) return false;
-      }
+      if (!matchMessagePattern(d.message, params.messagePattern)) return false;
     }
     return true;
   }
@@ -591,7 +656,14 @@ export class DiagnosticStore {
     if (this.byUri.has(uriOrPath)) return uriOrPath;
 
     const normalizedInput = normalizePath(uriOrPath);
+    
+    const exactMatch = this.findExactPathMatch(normalizedInput);
+    if (exactMatch !== undefined) return exactMatch;
 
+    return this.findMultiRootMatch(normalizedInput);
+  }
+
+  private findExactPathMatch(normalizedInput: string): string | undefined {
     let match: string | undefined;
     for (const [key, diags] of this.byUri) {
       const relPath = diags[0]?.relativePath;
@@ -600,20 +672,21 @@ export class DiagnosticStore {
         match = key;
       }
     }
-    if (match) return match;
+    return match;
+  }
 
+  private findMultiRootMatch(normalizedInput: string): string | undefined {
     const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
-    if (multiRoot) {
-      const candidates: string[] = [];
-      for (const [key, diags] of this.byUri) {
-        const rel = diags[0]?.relativePath;
-        if (rel && normalizePath(rel).endsWith(`/${normalizedInput}`)) {
-          candidates.push(key);
-        }
+    if (!multiRoot) return undefined;
+
+    const candidates: string[] = [];
+    for (const [key, diags] of this.byUri) {
+      const rel = diags[0]?.relativePath;
+      if (rel && normalizePath(rel).endsWith(`/${normalizedInput}`)) {
+        candidates.push(key);
       }
-      if (candidates.length === 1) return candidates[0];
     }
-    return undefined;
+    return candidates.length === 1 ? candidates[0] : undefined;
   }
 
   private resetIndexes(): void {
