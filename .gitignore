@@ -178,3 +178,6 @@ Temporary Items
 # Built Visual Studio Code Extensions
 *.vsix
 .claude/
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

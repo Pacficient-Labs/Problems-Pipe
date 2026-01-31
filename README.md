@@ -26,6 +26,7 @@ AI coding assistants work better when they can see the same diagnostics you see.
 {
   "mcpServers": {
     "problems-pipe": {
+      "type": "streamable-http",
       "url": "http://127.0.0.1:3030/mcp"
     }
   }
@@ -33,6 +34,78 @@ AI coding assistants work better when they can see the same diagnostics you see.
 ```
 
 > Use the command **Problems Pipe: Copy MCP Server Configuration** to copy this config to your clipboard.
+
+### Client-specific setup
+
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+Add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "problems-pipe": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:3030/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "problems-pipe": {
+      "url": "http://127.0.0.1:3030/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Cline</strong></summary>
+
+Add to Cline's MCP settings (`cline_mcp_settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "problems-pipe": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:3030/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "problems-pipe": {
+      "url": "http://127.0.0.1:3030/mcp"
+    }
+  }
+}
+```
+
+</details>
 
 ## MCP Tools
 

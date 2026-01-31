@@ -1,6 +1,7 @@
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
+import { logDebug } from "../../utils/index.js";
 
 function encodeResourcePath(value: string): string {
   return value.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
@@ -43,7 +44,9 @@ export function registerFileProblemsResource(
         ? variables.path.join("/")
         : variables.path;
       const path = decodeResourcePath(rawPath);
+      logDebug(`[Resource:file-problems] accessed — path: ${path}`);
       const diagnostics = await store.getForFile(path);
+      logDebug(`[Resource:file-problems] returning ${diagnostics.length} diagnostic(s)`);
       return {
         contents: [
           {

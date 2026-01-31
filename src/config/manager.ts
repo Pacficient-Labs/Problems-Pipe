@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { logDebug, logDebugData } from "../utils/index.js";
 
 export interface ExtensionConfig {
   enabled: boolean;
@@ -33,19 +34,41 @@ function loadConfig(): ExtensionConfig {
   };
 }
 
+function diffConfig(
+  prev: ExtensionConfig,
+  next: ExtensionConfig
+): string[] {
+  const changes: string[] = [];
+  for (const key of Object.keys(next) as (keyof ExtensionConfig)[]) {
+    const oldVal = JSON.stringify(prev[key]);
+    const newVal = JSON.stringify(next[key]);
+    if (oldVal !== newVal) {
+      changes.push(`${key}: ${oldVal} -> ${newVal}`);
+    }
+  }
+  return changes;
+}
+
 export class ConfigurationManager implements vscode.Disposable {
   private config: ExtensionConfig;
-  private disposables: vscode.Disposable[] = [];
-  private changeEmitter = new vscode.EventEmitter<ExtensionConfig>();
+  private readonly disposables: vscode.Disposable[] = [];
+  private readonly changeEmitter = new vscode.EventEmitter<ExtensionConfig>();
 
   readonly onDidChange = this.changeEmitter.event;
 
   constructor() {
     this.config = loadConfig();
+    logDebug("[Config] initial config loaded");
+    logDebugData("[Config] values", this.config);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration(SECTION)) {
+          const previous = this.config;
           this.config = loadConfig();
+          const changes = diffConfig(previous, this.config);
+          logDebug(
+            `[Config] configuration changed — ${changes.length} field(s): ${changes.join("; ") || "none"}`
+          );
           this.changeEmitter.fire(this.config);
         }
       })
@@ -57,6 +80,7 @@ export class ConfigurationManager implements vscode.Disposable {
   }
 
   dispose(): void {
+    logDebug("[Config] disposing ConfigurationManager");
     this.disposables.forEach((d) => d.dispose());
     this.changeEmitter.dispose();
   }

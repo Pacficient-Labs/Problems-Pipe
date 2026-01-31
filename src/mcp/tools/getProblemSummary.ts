@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
+import { logDebug } from "../../utils/index.js";
 
 export function registerGetProblemSummary(
   server: McpServer,
@@ -16,7 +17,9 @@ export function registerGetProblemSummary(
         .describe("How to group the summary"),
     },
     async ({ groupBy }) => {
+      logDebug(`[Tool:get_problem_summary] invoked — groupBy: ${groupBy}`);
       const summary = store.getSummary(groupBy);
+      logDebug(`[Tool:get_problem_summary] total: ${summary.total}, groups: ${Object.keys(summary.byGroup).length}`);
       return {
         content: [
           {

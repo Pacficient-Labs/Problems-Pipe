@@ -5,7 +5,7 @@ import type {
   RegisteredTool,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
-import { logError } from "../../utils/index.js";
+import { logError, logDebug } from "../../utils/index.js";
 
 interface CodeActionInfo {
   title: string;
@@ -102,9 +102,12 @@ export function registerGetCodeActions(
       character: z.number().optional().describe("Character offset (0-based)"),
     },
     async (params) => {
+      logDebug(`[Tool:get_code_actions] invoked — uri: ${params.uri}, line: ${params.line}, character: ${params.character}`);
       const uri = await resolveUriInput(params.uri);
+      logDebug(`[Tool:get_code_actions] resolved URI: ${uri}`);
 
       const actions = await fetchCodeActions(uri, params.line, params.character);
+      logDebug(`[Tool:get_code_actions] returning ${actions.length} action(s)`);
       return {
         content: [
           {

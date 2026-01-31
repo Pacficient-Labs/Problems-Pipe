@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
+import { logDebug } from "../../utils/index.js";
 
 export function registerExplainErrorPrompt(
   server: McpServer,
@@ -11,8 +12,10 @@ export function registerExplainErrorPrompt(
     "Explain a specific error and suggest how to fix it",
     { diagnosticId: z.string().describe("The diagnostic ID to explain") },
     async ({ diagnosticId }) => {
+      logDebug(`[Prompt:explain-error] invoked — diagnosticId: ${diagnosticId}`);
       const diagnostic = store.getById(diagnosticId);
       if (!diagnostic) {
+        logDebug(`[Prompt:explain-error] diagnostic not found: ${diagnosticId}`);
         return {
           messages: [
             {

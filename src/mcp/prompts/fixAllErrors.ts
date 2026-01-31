@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
 import type { EnrichedDiagnostic } from "../../types/index.js";
+import { logDebug } from "../../utils/index.js";
 
 function formatErrorsForPrompt(errors: EnrichedDiagnostic[]): string {
   if (errors.length === 0) return "No errors found in the workspace.";
@@ -35,10 +36,12 @@ export function registerFixAllErrorsPrompt(
     "fix-all-errors",
     "Generate a prompt to fix all errors in the workspace",
     async () => {
+      logDebug("[Prompt:fix-all-errors] invoked");
       const errors = await store.query({
         severity: ["error"],
         limit: Number.MAX_SAFE_INTEGER,
       });
+      logDebug(`[Prompt:fix-all-errors] found ${errors.length} error(s)`);
       const formatted = formatErrorsForPrompt(errors);
       return {
         messages: [

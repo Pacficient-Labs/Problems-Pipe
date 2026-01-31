@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ProblemsMcpServer } from "../mcp/index.js";
 import type { DiagnosticStore } from "../diagnostics/index.js";
+import { logTrace } from "../utils/index.js";
 
 export class StatusBarManager implements vscode.Disposable {
   private item: vscode.StatusBarItem;
@@ -27,6 +28,7 @@ export class StatusBarManager implements vscode.Disposable {
   update(): void {
     const counts = this.store.getCounts();
     const running = this.server.isRunning;
+    logTrace(`[StatusBar] update — running: ${running}, errors: ${counts.errors}, warnings: ${counts.warnings}, info: ${counts.info}, hints: ${counts.hints}`);
 
     if (!running) {
       this.item.text = "$(circle-slash) Problems Pipe: Off";

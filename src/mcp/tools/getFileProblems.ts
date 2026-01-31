@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
 import type { EnrichedDiagnostic } from "../../types/index.js";
+import { logDebug } from "../../utils/index.js";
 
 function formatFileProblems(
   filePath: string,
@@ -74,10 +75,12 @@ export function registerGetFileProblems(
         .describe("Number of context lines (defaults to config)"),
     },
     async (params) => {
+      logDebug(`[Tool:get_file_problems] invoked — uri: ${params.uri}, includeContext: ${params.includeContext}`);
       const diagnostics = await store.getForFile(params.uri, {
         includeContext: params.includeContext,
         contextLines: params.contextLines,
       });
+      logDebug(`[Tool:get_file_problems] returning ${diagnostics.length} diagnostic(s)`);
       return {
         content: [
           {

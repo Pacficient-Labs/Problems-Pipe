@@ -2,7 +2,7 @@ import * as http from "node:http";
 import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { logInfo, logError, logDebug } from "../../utils/index.js";
+import { logInfo, logError, logDebug, logTrace } from "../../utils/index.js";
 
 export class HttpTransport {
   private httpServer: http.Server | undefined;
@@ -12,10 +12,15 @@ export class HttpTransport {
     private mcpServer: McpServer,
     private host: string,
     private port: number
-  ) {}
+  ) {
+    logDebug(`[HttpTransport] created — ${host}:${port}`);
+  }
 
   async start(): Promise<void> {
+    logDebug("[HttpTransport] starting HTTP server");
     this.httpServer = http.createServer(async (req, res) => {
+      logTrace(`[HttpTransport] ${req.method} ${req.url} — session: ${req.headers["mcp-session-id"] ?? "none"}`);
+
       // CORS headers for local clients
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
@@ -26,12 +31,14 @@ export class HttpTransport {
       res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
 
       if (req.method === "OPTIONS") {
+        logTrace("[HttpTransport] CORS preflight response");
         res.writeHead(204);
         res.end();
         return;
       }
 
       if (req.url === "/health") {
+        logDebug(`[HttpTransport] health check — ${this.transports.size} active session(s)`);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
@@ -43,6 +50,7 @@ export class HttpTransport {
       }
 
       if (req.url !== "/mcp") {
+        logDebug(`[HttpTransport] 404 — unknown path: ${req.url}`);
         res.writeHead(404);
         res.end("Not found");
         return;
@@ -75,10 +83,12 @@ export class HttpTransport {
   }
 
   async stop(): Promise<void> {
+    logDebug(`[HttpTransport] stopping — closing ${this.transports.size} session(s)`);
     // Close all transports
-    for (const transport of this.transports.values()) {
+    for (const [id, transport] of this.transports) {
       try {
         await transport.close();
+        logDebug(`[HttpTransport] closed session ${id}`);
       } catch {
         // ignore close errors
       }
@@ -117,10 +127,12 @@ export class HttpTransport {
 
     if (req.method === "GET") {
       // SSE stream for notifications
+      logDebug(`[HttpTransport] GET SSE stream — session: ${sessionId ?? "none"}`);
       const transport = sessionId ? this.transports.get(sessionId) : undefined;
       if (transport) {
         await transport.handleRequest(req, res);
       } else {
+        logDebug(`[HttpTransport] GET rejected — invalid session: ${sessionId}`);
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Invalid or missing session ID" }));
       }
@@ -129,12 +141,14 @@ export class HttpTransport {
 
     if (req.method === "DELETE") {
       // Session cleanup
+      logDebug(`[HttpTransport] DELETE session cleanup — session: ${sessionId ?? "none"}`);
       const transport = sessionId ? this.transports.get(sessionId) : undefined;
       if (transport) {
         await transport.handleRequest(req, res);
         this.transports.delete(sessionId!);
-        logDebug(`Session ${sessionId} closed`);
+        logDebug(`[HttpTransport] session ${sessionId} closed — ${this.transports.size} remaining`);
       } else {
+        logDebug(`[HttpTransport] DELETE rejected — invalid session: ${sessionId}`);
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Invalid or missing session ID" }));
       }
@@ -143,24 +157,26 @@ export class HttpTransport {
 
     if (req.method === "POST") {
       const body = await readBody(req);
+      logTrace(`[HttpTransport] POST body (${body.length} bytes)`);
       const parsed = JSON.parse(body);
 
       let transport = sessionId ? this.transports.get(sessionId) : undefined;
 
       if (!transport && this.isInitializeRequest(parsed)) {
+        logDebug("[HttpTransport] initialize request detected — creating new session");
         // New session
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id) => {
             this.transports.set(id, transport!);
-            logDebug(`New MCP session: ${id}`);
+            logDebug(`[HttpTransport] new MCP session initialized: ${id} — ${this.transports.size} total`);
           },
         });
 
         transport.onclose = () => {
           if (transport!.sessionId) {
             this.transports.delete(transport!.sessionId);
-            logDebug(`Session closed: ${transport!.sessionId}`);
+            logDebug(`[HttpTransport] session transport closed: ${transport!.sessionId}`);
           }
         };
 
@@ -170,6 +186,7 @@ export class HttpTransport {
       if (transport) {
         await transport.handleRequest(req, res, parsed);
       } else {
+        logDebug("[HttpTransport] POST rejected — no valid session and not an initialize request");
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
@@ -185,6 +202,7 @@ export class HttpTransport {
       return;
     }
 
+    logDebug(`[HttpTransport] 405 — unsupported method: ${req.method}`);
     res.writeHead(405);
     res.end("Method not allowed");
   }

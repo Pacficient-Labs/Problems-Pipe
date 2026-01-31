@@ -9,40 +9,92 @@ import type {
 } from "../types/index.js";
 import { ContextEnricher } from "./enricher.js";
 import type { ExtensionConfig } from "../config/index.js";
-import { logDebug } from "../utils/index.js";
+import { logDebug, logTrace, isDebugEnabled } from "../utils/index.js";
 
-function globToRegex(glob: string): RegExp {
-  let regex = "";
-  let i = 0;
-  while (i < glob.length) {
-    const c = glob[i];
-    if (c === "*" && glob[i + 1] === "*") {
-      // ** matches any number of path segments
-      regex += ".*";
-      i += 2;
-      if (glob[i] === "/") i++; // skip trailing /
-    } else if (c === "*") {
-      regex += "[^/]*";
-      i++;
-    } else if (c === "?") {
-      regex += "[^/]";
-      i++;
-    } else if (c === ".") {
-      regex += String.raw`\.`;
-      i++;
-    } else if ("+^$()[]{}|\\".includes(c)) {
-      regex += `\\${c}`;
-      i++;
-    } else {
-      regex += c;
-      i++;
+/**
+ * Safe glob matcher for paths.
+ *
+ * Supported tokens:
+ * - `*`  : matches any number of characters within a single path segment (not `/`)
+ * - `?`  : matches a single character within a segment (not `/`)
+ * - `**` : matches zero or more path segments
+ *
+ * We intentionally avoid dynamic RegExp construction here to satisfy security
+ * tooling (Semgrep/ESLint) and reduce ReDoS risk.
+ */
+function globMatch(glob: string, value: string): boolean {
+  // Both inputs are assumed to be normalized to use forward slashes.
+  const patternParts = glob.split("/").filter((p) => p.length > 0);
+  const valueParts = value.split("/").filter((p) => p.length > 0);
+
+  const matchSegment = (pattern: string, segment: string): boolean => {
+    // Iterative wildcard matching (linear-ish in segment length).
+    let pi = 0;
+    let si = 0;
+    let starPi = -1;
+    let starSi = -1;
+
+    while (si < segment.length) {
+      const pc = pattern[pi];
+      if (pi < pattern.length && (pc === "?" || pc === segment[si])) {
+        pi++;
+        si++;
+        continue;
+      }
+      if (pi < pattern.length && pc === "*") {
+        starPi = pi;
+        pi++; // consume '*'
+        starSi = si;
+        continue;
+      }
+      if (starPi !== -1) {
+        // Backtrack: extend the last '*' match by one.
+        pi = starPi + 1;
+        starSi++;
+        si = starSi;
+        continue;
+      }
+      return false;
     }
-  }
-  return new RegExp("^" + regex + "$");
+
+    // Trailing '*' can match empty suffix.
+    while (pi < pattern.length && pattern[pi] === "*") pi++;
+    return pi === pattern.length;
+  };
+
+  const matchParts = (pIndex: number, vIndex: number): boolean => {
+    while (true) {
+      if (pIndex === patternParts.length) return vIndex === valueParts.length;
+
+      const p = patternParts[pIndex];
+      if (p === "**") {
+        // Collapse consecutive '**'
+        while (pIndex + 1 < patternParts.length && patternParts[pIndex + 1] === "**") {
+          pIndex++;
+        }
+        // '**' at end matches the rest.
+        if (pIndex === patternParts.length - 1) return true;
+
+        // Try to match the remaining pattern at every possible segment boundary.
+        for (let skip = vIndex; skip <= valueParts.length; skip++) {
+          if (matchParts(pIndex + 1, skip)) return true;
+        }
+        return false;
+      }
+
+      if (vIndex === valueParts.length) return false;
+      if (!matchSegment(p, valueParts[vIndex])) return false;
+
+      pIndex++;
+      vIndex++;
+    }
+  };
+
+  return matchParts(0, 0);
 }
 
 function normalizePath(value: string): string {
-  return value.replace(/\\/g, "/");
+  return value.replaceAll('\\', "/");
 }
 
 const SEVERITY_MAP: Record<vscode.DiagnosticSeverity, Severity> = {
@@ -100,28 +152,32 @@ function nextId(): string {
 }
 
 export class DiagnosticStore {
-  private byUri = new Map<string, EnrichedDiagnostic[]>();
-  private bySeverity = new Map<Severity, Set<string>>();
-  private bySource = new Map<string, Set<string>>();
-  private cachedSummaries = new Map<SummaryGroupBy, DiagnosticSummary>();
-  private enricher = new ContextEnricher();
-  private changeEmitter = new vscode.EventEmitter<string[]>();
+  private readonly byUri = new Map<string, EnrichedDiagnostic[]>();
+  private readonly bySeverity = new Map<Severity, Set<string>>();
+  private readonly bySource = new Map<string, Set<string>>();
+  private readonly cachedSummaries = new Map<SummaryGroupBy, DiagnosticSummary>();
+  private readonly enricher = new ContextEnricher();
+  private readonly changeEmitter = new vscode.EventEmitter<string[]>();
   private disposables: vscode.Disposable[] = [];
 
   readonly onDidChange = this.changeEmitter.event;
 
   constructor(private config: ExtensionConfig) {
+    logDebug("[Store] initializing DiagnosticStore");
     for (const sev of ["error", "warning", "information", "hint"] as Severity[]) {
       this.bySeverity.set(sev, new Set());
     }
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((event) => {
-        this.enricher.invalidate(event.document.uri.toString());
+        const uri = event.document.uri;
+        if (uri.scheme === "output") return;
+        this.enricher.invalidate(uri.toString());
       })
     );
   }
 
   updateConfig(config: ExtensionConfig): void {
+    logDebug(`[Store] updateConfig called — rebuilding indexes for ${this.byUri.size} URI(s)`);
     const previousUris = new Set(this.byUri.keys());
     this.config = config;
     this.resetIndexes();
@@ -134,11 +190,13 @@ export class DiagnosticStore {
     }
 
     if (changedUris.size > 0) {
+      logDebug(`[Store] config update affected ${changedUris.size} URI(s)`);
       this.changeEmitter.fire([...changedUris]);
     }
   }
 
   handleDiagnosticChange(event: vscode.DiagnosticChangeEvent): void {
+    logDebug(`[Store] handleDiagnosticChange — ${event.uris.length} URI(s)`);
     const changedUris: string[] = [];
     for (const uri of event.uris) {
       const raw = vscode.languages.getDiagnostics(uri);
@@ -152,6 +210,7 @@ export class DiagnosticStore {
 
   private updateUri(uri: vscode.Uri, diagnostics: readonly vscode.Diagnostic[]): void {
     const uriStr = uri.toString();
+    const relPath = relativePath(uri);
 
     // Remove old index entries
     const old = this.byUri.get(uriStr);
@@ -161,14 +220,31 @@ export class DiagnosticStore {
 
     // Filter diagnostics based on config
     let filtered = [...diagnostics];
+    const rawCount = filtered.length;
     if (this.config.includeSources.length > 0) {
       filtered = filtered.filter(
         (d) => d.source && this.config.includeSources.includes(d.source)
       );
+      if (filtered.length !== rawCount) {
+        logTrace(
+          `[Store] source include filter: ${rawCount} -> ${filtered.length} for ${relPath}`
+        );
+      }
     }
     if (this.config.excludeSources.length > 0) {
+      const beforeExclude = filtered.length;
       filtered = filtered.filter(
         (d) => !d.source || !this.config.excludeSources.includes(d.source)
+      );
+      if (filtered.length !== beforeExclude) {
+        logTrace(
+          `[Store] source exclude filter: ${beforeExclude} -> ${filtered.length} for ${relPath}`
+        );
+      }
+    }
+    if (filtered.length > this.config.maxDiagnosticsPerFile) {
+      logTrace(
+        `[Store] capping diagnostics: ${filtered.length} -> ${this.config.maxDiagnosticsPerFile} for ${relPath}`
       );
     }
     filtered = filtered.slice(0, this.config.maxDiagnosticsPerFile);
@@ -185,7 +261,7 @@ export class DiagnosticStore {
 
     this.enricher.invalidate(uriStr);
     this.cachedSummaries.clear();
-    logDebug(`Updated ${enriched.length} diagnostics for ${relativePath(uri)}`);
+    logDebug(`[Store] updated ${enriched.length} diagnostics for ${relPath}`);
   }
 
   private enrich(uri: vscode.Uri, d: vscode.Diagnostic): EnrichedDiagnostic {
@@ -252,6 +328,13 @@ export class DiagnosticStore {
   }
 
   async query(params: DiagnosticQuery = {}): Promise<EnrichedDiagnostic[]> {
+    if (isDebugEnabled()) {
+      const filters = Object.entries(params)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+        .join(", ");
+      logDebug(`[Store] query — ${filters || "no filters"}`);
+    }
     let candidateUris: Set<string>;
 
     if (params.uri) {
@@ -268,11 +351,10 @@ export class DiagnosticStore {
     // Apply URI pattern filter
     if (params.uriPattern) {
       const pattern = normalizePath(params.uriPattern);
-      const regex = globToRegex(pattern);
       const filtered = new Set<string>();
       for (const uri of candidateUris) {
         const rel = this.byUri.get(uri)?.[0]?.relativePath;
-        if (rel && regex.test(normalizePath(rel))) {
+        if (rel && globMatch(pattern, normalizePath(rel))) {
           filtered.add(uri);
         }
       }
@@ -317,9 +399,11 @@ export class DiagnosticStore {
     // Optionally enrich with context
     if (params.includeContext) {
       const contextCount = params.contextLines ?? this.config.contextLines;
+      logDebug(`[Store] enriching ${results.length} result(s) with ${contextCount} context lines`);
       results = await this.addContext(results, contextCount);
     }
 
+    logDebug(`[Store] query returned ${results.length} result(s)`);
     return results;
   }
 
@@ -327,9 +411,11 @@ export class DiagnosticStore {
     uriOrPath: string,
     options?: { includeContext?: boolean; contextLines?: number }
   ): Promise<EnrichedDiagnostic[]> {
+    logDebug(`[Store] getForFile — path: ${uriOrPath}, includeContext: ${options?.includeContext ?? false}`);
     const uri = this.resolveUriOrPath(uriOrPath) ?? uriOrPath;
 
     const diags = this.byUri.get(uri) ?? [];
+    logDebug(`[Store] getForFile found ${diags.length} diagnostic(s)`);
     if (options?.includeContext) {
       return this.addContext(diags, options.contextLines ?? this.config.contextLines);
     }
@@ -364,7 +450,11 @@ export class DiagnosticStore {
 
   getSummary(groupBy: SummaryGroupBy): DiagnosticSummary {
     const cached = this.cachedSummaries.get(groupBy);
-    if (cached) return cached;
+    if (cached) {
+      logDebug(`[Store] getSummary(${groupBy}) — returning cached`);
+      return cached;
+    }
+    logDebug(`[Store] getSummary(${groupBy}) — computing`);
 
     const all = this.getAll();
     const byGroup: Record<string, { count: number; files: Set<string> }> = {};
@@ -487,6 +577,7 @@ export class DiagnosticStore {
   }
 
   dispose(): void {
+    logDebug(`[Store] disposing — ${this.byUri.size} URI(s) in store`);
     this.disposables.forEach((d) => d.dispose());
     this.changeEmitter.dispose();
     this.enricher.clear();

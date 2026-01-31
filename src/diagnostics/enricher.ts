@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import type { ContextLines } from "../types/index.js";
-import { LRUCache } from "../utils/index.js";
+import { LRUCache, logDebug, logTrace } from "../utils/index.js";
 
 export class ContextEnricher {
-  private fileCache = new LRUCache<string[]>(100);
+  private readonly fileCache = new LRUCache<string[]>(100);
 
   async getContextLines(
     uri: vscode.Uri,
@@ -12,6 +12,7 @@ export class ContextEnricher {
   ): Promise<ContextLines | undefined> {
     if (count <= 0) return undefined;
 
+    logTrace(`[Enricher] getContextLines — uri: ${uri.fsPath}, line: ${line}, count: ${count}`);
     const lines = await this.getFileLines(uri);
     if (!lines || line < 0 || line >= lines.length) return undefined;
 
@@ -26,24 +27,32 @@ export class ContextEnricher {
   }
 
   invalidate(uri: string): void {
+    logTrace(`[Enricher] cache invalidated — ${uri}`);
     this.fileCache.delete(uri);
   }
 
   clear(): void {
+    logDebug("[Enricher] cache cleared");
     this.fileCache.clear();
   }
 
   private async getFileLines(uri: vscode.Uri): Promise<string[] | undefined> {
     const key = uri.toString();
     const cached = this.fileCache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      logTrace(`[Enricher] cache hit — ${uri.fsPath}`);
+      return cached;
+    }
 
+    logTrace(`[Enricher] cache miss — loading ${uri.fsPath}`);
     try {
       const doc = await vscode.workspace.openTextDocument(uri);
       const lines = doc.getText().split("\n");
       this.fileCache.set(key, lines);
+      logTrace(`[Enricher] loaded ${lines.length} lines from ${uri.fsPath}`);
       return lines;
     } catch {
+      logDebug(`[Enricher] failed to load file: ${uri.fsPath}`);
       return undefined;
     }
   }

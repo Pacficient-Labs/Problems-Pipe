@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiagnosticStore } from "../../diagnostics/index.js";
+import { logDebug } from "../../utils/index.js";
 
 export function registerGetProblems(server: McpServer, store: DiagnosticStore): void {
   server.tool(
@@ -55,7 +56,9 @@ export function registerGetProblems(server: McpServer, store: DiagnosticStore): 
         .describe("Number of context lines above and below (defaults to config)"),
     },
     async (params) => {
+      logDebug(`[Tool:get_problems] invoked — limit: ${params.limit}, severity: ${params.severity?.join(",") ?? "all"}, uri: ${params.uri ?? "any"}`);
       const diagnostics = await store.query(params);
+      logDebug(`[Tool:get_problems] returning ${diagnostics.length} result(s)`);
       return {
         content: [
           {

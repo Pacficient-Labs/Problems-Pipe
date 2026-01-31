@@ -3,7 +3,7 @@ import type { ProblemsMcpServer } from "../mcp/index.js";
 import type { DiagnosticStore } from "../diagnostics/index.js";
 import type { StatusBarManager } from "./statusBar.js";
 import type { ExtensionConfig } from "../config/index.js";
-import { logInfo, logError } from "../utils/index.js";
+import { logInfo, logError, logDebug } from "../utils/index.js";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -14,7 +14,9 @@ export function registerCommands(
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("problemsPipe.start", async () => {
+      logDebug("[Command:start] invoked");
       if (!getConfig().enabled) {
+        logDebug("[Command:start] extension is disabled, aborting");
         vscode.window.showWarningMessage(
           "Problems Pipe is disabled in settings. Enable it to start the server."
         );
@@ -23,6 +25,7 @@ export function registerCommands(
       try {
         await server.start();
         statusBar.update();
+        logDebug(`[Command:start] server started at ${server.url}`);
         vscode.window.showInformationMessage(
           `Problems Pipe MCP server started at ${server.url}`
         );
@@ -36,12 +39,14 @@ export function registerCommands(
     }),
 
     vscode.commands.registerCommand("problemsPipe.stop", async () => {
+      logDebug("[Command:stop] invoked");
       await server.stop();
       statusBar.update();
       vscode.window.showInformationMessage("Problems Pipe MCP server stopped");
     }),
 
     vscode.commands.registerCommand("problemsPipe.showStatus", async () => {
+      logDebug("[Command:showStatus] invoked");
       const counts = store.getCounts();
       const total = counts.errors + counts.warnings + counts.info + counts.hints;
 
@@ -76,6 +81,7 @@ export function registerCommands(
             "Start Server"
           );
 
+      logDebug(`[Command:showStatus] user action: ${action ?? "dismissed"}`);
       if (action === "Start Server") {
         await vscode.commands.executeCommand("problemsPipe.start");
       } else if (action === "Stop Server") {
@@ -86,6 +92,7 @@ export function registerCommands(
     }),
 
     vscode.commands.registerCommand("problemsPipe.copyServerConfig", async () => {
+      logDebug("[Command:copyServerConfig] invoked");
       if (!server.isRunning) {
         vscode.window.showWarningMessage(
           "Start the MCP server first to copy its configuration"

@@ -20,8 +20,9 @@ export class ProblemsMcpServer implements vscode.Disposable {
     private store: DiagnosticStore,
     private config: ExtensionConfig
   ) {
+    logDebug("[McpServer] constructing ProblemsMcpServer");
     this.mcpServer = new McpServer(
-      { name: "problems-pipe", version: "0.1.0" },
+      { name: "problems-pipe", version: "0.0.1" },
       {
         capabilities: {
           tools: { listChanged: true },
@@ -32,12 +33,16 @@ export class ProblemsMcpServer implements vscode.Disposable {
       }
     );
 
+    logDebug("[McpServer] registering tools");
     const tools = registerAllTools(this.mcpServer, this.store);
+    logDebug("[McpServer] registering resources");
     registerAllResources(this.mcpServer, this.store);
+    logDebug("[McpServer] registering prompts");
     registerAllPrompts(this.mcpServer, this.store);
 
     this.codeActionsTool = tools.codeActionsTool;
     if (!this.config.enableCodeActions) {
+      logDebug("[McpServer] code actions tool disabled by config");
       this.codeActionsTool.disable();
     }
   }
@@ -46,9 +51,11 @@ export class ProblemsMcpServer implements vscode.Disposable {
     this.config = config;
     if (this.config.enableCodeActions) {
       if (!this.codeActionsTool.enabled) {
+        logDebug("[McpServer] enabling code actions tool");
         this.codeActionsTool.enable();
       }
     } else if (this.codeActionsTool.enabled) {
+      logDebug("[McpServer] disabling code actions tool");
       this.codeActionsTool.disable();
     }
   }
@@ -59,6 +66,7 @@ export class ProblemsMcpServer implements vscode.Disposable {
       return;
     }
 
+    logDebug(`[McpServer] starting — ${this.config.httpHost}:${this.config.httpPort}`);
     try {
       this.transport = new HttpTransport(
         this.mcpServer,
@@ -69,7 +77,8 @@ export class ProblemsMcpServer implements vscode.Disposable {
       this.running = true;
 
       // Notify clients when diagnostics change
-      this.changeListener = this.store.onDidChange(() => {
+      this.changeListener = this.store.onDidChange((uris) => {
+        logDebug(`[McpServer] diagnostics changed for ${uris.length} URI(s), notifying clients`);
         this.mcpServer.sendResourceListChanged();
       });
 
@@ -82,8 +91,12 @@ export class ProblemsMcpServer implements vscode.Disposable {
   }
 
   async stop(): Promise<void> {
-    if (!this.running) return;
+    if (!this.running) {
+      logDebug("[McpServer] stop called but server is not running");
+      return;
+    }
 
+    logDebug("[McpServer] stopping server");
     this.changeListener?.dispose();
     this.changeListener = undefined;
 
@@ -97,6 +110,7 @@ export class ProblemsMcpServer implements vscode.Disposable {
   }
 
   async restart(): Promise<void> {
+    logDebug("[McpServer] restarting server");
     await this.stop();
     await this.start();
   }
@@ -119,6 +133,7 @@ export class ProblemsMcpServer implements vscode.Disposable {
     return {
       mcpServers: {
         "problems-pipe": {
+          type: "streamable-http",
           url: `http://${clientHost}:${this.config.httpPort}/mcp`,
         },
       },
@@ -126,6 +141,7 @@ export class ProblemsMcpServer implements vscode.Disposable {
   }
 
   dispose(): void {
+    logDebug("[McpServer] disposing");
     this.stop().catch((err) => logError("Error during shutdown", err));
   }
 }
