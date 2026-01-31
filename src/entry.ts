@@ -13,5 +13,5 @@ export async function activate(
 }
 
 export function deactivate(): void {
-  extensionModule?.deactivate?.();
+  extensionModule?.deactivate();
 }

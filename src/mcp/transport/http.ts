@@ -114,7 +114,7 @@ export class HttpTransport {
     // Close HTTP server
     if (this.httpServer) {
       return new Promise((resolve) => {
-        this.httpServer!.close(() => {
+        this.httpServer?.close(() => {
           this.httpServer = undefined;
           logInfo("MCP HTTP server stopped");
           resolve();
@@ -314,7 +314,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    req.on("end", () => { resolve(Buffer.concat(chunks).toString()); });
     req.on("error", reject);
   });
 }

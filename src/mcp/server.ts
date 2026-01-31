@@ -142,6 +142,6 @@ export class ProblemsMcpServer implements vscode.Disposable {
 
   dispose(): void {
     logDebug("[McpServer] disposing");
-    this.stop().catch((err) => logError("Error during shutdown", err));
+    this.stop().catch((err) => { logError("Error during shutdown", err); });
   }
 }
